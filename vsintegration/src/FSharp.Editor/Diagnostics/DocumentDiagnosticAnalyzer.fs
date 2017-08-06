@@ -3,7 +3,6 @@
 namespace Microsoft.VisualStudio.FSharp.Editor
 
 open System
-open System.Composition
 open System.Collections.Immutable
 open System.Collections.Generic
 open System.Threading
@@ -11,15 +10,11 @@ open System.Threading.Tasks
 
 open Microsoft.CodeAnalysis
 open Microsoft.CodeAnalysis.Diagnostics
-open Microsoft.CodeAnalysis.Host.Mef
 open Microsoft.CodeAnalysis.Text
-open Microsoft.CodeAnalysis.SolutionCrawler
 
 open Microsoft.FSharp.Compiler
 open Microsoft.FSharp.Compiler.SourceCodeServices
-open Microsoft.FSharp.Compiler.Range
 
-open Microsoft.VisualStudio.FSharp.LanguageService
 
 [<RequireQualifiedAccess>]
 type internal DiagnosticsType =
@@ -30,6 +25,7 @@ type internal DiagnosticsType =
 type internal FSharpDocumentDiagnosticAnalyzer() =
     inherit DocumentDiagnosticAnalyzer()
 
+    static let userOpName = "DocumentDiagnosticAnalyzer"
     let getChecker(document: Document) =
         document.Project.Solution.Workspace.Services.GetService<FSharpCheckerWorkspaceService>().Checker
 
@@ -63,12 +59,12 @@ type internal FSharpDocumentDiagnosticAnalyzer() =
 
     static member GetDiagnostics(checker: FSharpChecker, filePath: string, sourceText: SourceText, textVersionHash: int, options: FSharpProjectOptions, diagnosticType: DiagnosticsType) = 
         async {
-            let! parseResults = checker.ParseFileInProject(filePath, sourceText.ToString(), options) 
+            let! parseResults = checker.ParseFileInProject(filePath, sourceText.ToString(), options, userOpName=userOpName) 
             let! errors = 
                 async {
                     match diagnosticType with
                     | DiagnosticsType.Semantic ->
-                        let! checkResultsAnswer = checker.CheckFileInProject(parseResults, filePath, textVersionHash, sourceText.ToString(), options) 
+                        let! checkResultsAnswer = checker.CheckFileInProject(parseResults, filePath, textVersionHash, sourceText.ToString(), options, userOpName=userOpName) 
                         match checkResultsAnswer with
                         | FSharpCheckFileAnswer.Aborted -> return [||]
                         | FSharpCheckFileAnswer.Succeeded results ->
@@ -81,8 +77,8 @@ type internal FSharpDocumentDiagnosticAnalyzer() =
                 }
             
             let results = 
-               HashSet(errors, errorInfoEqualityComparer)
-               |> Seq.choose(fun error ->
+                HashSet(errors, errorInfoEqualityComparer)
+                |> Seq.choose(fun error ->
                     if error.StartLineAlternate = 0 || error.EndLineAlternate = 0 then
                         // F# error line numbers are one-based. Compiler returns 0 for global errors (reported by ProjectDiagnosticAnalyzer)
                         None
@@ -104,7 +100,7 @@ type internal FSharpDocumentDiagnosticAnalyzer() =
                         
                         let location = Location.Create(filePath, correctedTextSpan , linePositionSpan)
                         Some(RoslynHelpers.ConvertError(error, location)))
-               |> Seq.toImmutableArray
+                |> Seq.toImmutableArray
             return results
         }
 

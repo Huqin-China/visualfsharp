@@ -63,7 +63,7 @@ module internal GotoDefinition =
                         Strings.Errors.GotoDefinitionFailed_NotIdentifier ()
                         |> GotoDefinitionResult.MakeError
                     else
-                      match typedResults.GetDeclarationLocationAlternate (line+1, colIdent, lineStr, qualId, false) |> Async.RunSynchronously with
+                      match typedResults.GetDeclarationLocation (line+1, colIdent, lineStr, qualId, false) |> Async.RunSynchronously with
                       | FSharpFindDeclResult.DeclFound m -> 
                           let span = TextSpan (iStartLine = m.StartLine-1, iEndLine = m.StartLine-1, iStartIndex = m.StartColumn, iEndIndex = m.StartColumn) 
                           GotoDefinitionResult.MakeSuccess(m.FileName, span)
@@ -73,7 +73,7 @@ module internal GotoDefinition =
                           Trace.Write("LanguageService", sprintf "Goto definition failed: Reason %+A" reason)
                           let text = 
                               match reason with                    
-                              | FSharpFindDeclFailureReason.Unknown -> Strings.Errors.GotoDefinitionFailed()
+                              | FSharpFindDeclFailureReason.Unknown _message -> Strings.Errors.GotoDefinitionFailed()
                               | FSharpFindDeclFailureReason.NoSourceCode -> Strings.Errors.GotoDefinitionFailed_NoSourceCode()
                               | FSharpFindDeclFailureReason.ProvidedType(typeName) -> Strings.Errors.GotoDefinitionFailed_ProvidedType(typeName)
                               | FSharpFindDeclFailureReason.ProvidedMember(name) -> Strings.Errors.GotoFailed_ProvidedMember(name)

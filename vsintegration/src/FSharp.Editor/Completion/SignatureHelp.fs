@@ -10,7 +10,6 @@ open Microsoft.CodeAnalysis
 open Microsoft.CodeAnalysis.SignatureHelp
 open Microsoft.CodeAnalysis.Text
 
-open Microsoft.VisualStudio.FSharp.LanguageService
 open Microsoft.VisualStudio.Text
 open Microsoft.VisualStudio.Shell
 open Microsoft.VisualStudio.Shell.Interop
@@ -29,15 +28,16 @@ type internal FSharpSignatureHelpProvider
         projectInfoManager: ProjectInfoManager
     ) =
 
+    static let userOpName = "SignatureHelpProvider"
     let xmlMemberIndexService = serviceProvider.GetService(typeof<IVsXMLMemberIndexService>) :?> IVsXMLMemberIndexService
     let documentationBuilder = XmlDocumentation.CreateDocumentationBuilder(xmlMemberIndexService, serviceProvider.DTE)
 
     static let oneColAfter (lp: LinePosition) = LinePosition(lp.Line,lp.Character+1)
     static let oneColBefore (lp: LinePosition) = LinePosition(lp.Line,max 0 (lp.Character-1))
 
-    // Unit-testable core rutine
+    // Unit-testable core routine
     static member internal ProvideMethodsAsyncAux(checker: FSharpChecker, documentationBuilder: IDocumentationBuilder, sourceText: SourceText, caretPosition: int, options: FSharpProjectOptions, triggerIsTypedChar: char option, filePath: string, textVersionHash: int) = async {
-        let! parseResults, checkFileAnswer = checker.ParseAndCheckFileInProject(filePath, textVersionHash, sourceText.ToString(), options)
+        let! parseResults, checkFileAnswer = checker.ParseAndCheckFileInProject(filePath, textVersionHash, sourceText.ToString(), options, userOpName = userOpName)
         match checkFileAnswer with
         | FSharpCheckFileAnswer.Aborted -> return None
         | FSharpCheckFileAnswer.Succeeded(checkFileResults) -> 
@@ -56,7 +56,7 @@ type internal FSharpSignatureHelpProvider
         let lidEnd = nwpl.LongIdEndLocation
 
         // Get the methods
-        let! methodGroup = checkFileResults.GetMethodsAlternate(lidEnd.Line, lidEnd.Column, "", Some names)
+        let! methodGroup = checkFileResults.GetMethods(lidEnd.Line, lidEnd.Column, "", Some names)
 
         let methods = methodGroup.Methods
 
@@ -130,7 +130,7 @@ type internal FSharpSignatureHelpProvider
                 
             match (computedTextSpans|> Array.tryFindIndex (fun t -> t.Contains(caretPosition))) with 
             | None -> 
-                // Because 'TextSpan.Contains' only succeeeds if 'TextSpan.Start <= caretPosition < TextSpan.End' is true,
+                // Because 'TextSpan.Contains' only succeeds if 'TextSpan.Start <= caretPosition < TextSpan.End' is true,
                 // we need to check if the caret is at the very last position in the TextSpan.
                 //
                 // We default to 0, which is the first argument, if the caret position was nowhere to be found.
@@ -153,12 +153,12 @@ type internal FSharpSignatureHelpProvider
                 None  // not a named argument
 
         // Prepare the results
-        let results = List<_>()
+        let results = ResizeArray()
 
         for method in methods do
             // Create the documentation. Note, do this on the background thread, since doing it in the documentationBuild fails to build the XML index
-            let mainDescription = List()
-            let documentation = List()
+            let mainDescription = ResizeArray()
+            let documentation = ResizeArray()
             XmlDocumentation.BuildMethodOverloadTipText(documentationBuilder, RoslynHelpers.CollectTaggedText mainDescription, RoslynHelpers.CollectTaggedText documentation, method.StructuredDescription, false)
 
             let parameters = 
@@ -225,7 +225,6 @@ type internal FSharpSignatureHelpProvider
 
 open System.ComponentModel.Composition
 open Microsoft.VisualStudio.Utilities
-open Microsoft.VisualStudio.Text
 open Microsoft.VisualStudio.Text.Classification
 open Microsoft.CodeAnalysis.Editor.Implementation.IntelliSense.SignatureHelp.Presentation
 
